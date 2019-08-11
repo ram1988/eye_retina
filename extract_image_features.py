@@ -67,20 +67,22 @@ def parse_feature_label(filename,label):
     image_decoded = tf.image.decode_jpeg(image_string)
     image_resized = tf.image.resize_images(image_decoded, [vector_size, vector_size])
     print(image_resized.shape)
-    print(label.shape)
     return image_resized,label
 
-def prepare_image_files(path):
+def prepare_image_files(path,is_training=False):
     image_records = []
     image_labels = []
     i = 0
     with open(path) as train_labels:
         csv_reader = csv.reader(train_labels)
         for row in csv_reader:
-            label = int(row[1])
-            image_file = "train_images/"+row[0]+".png"
+            if is_training:
+                label = int(row[1])
+                image_labels.append(label)
+                image_file = "train_images/"+row[0]+".png"
+            else:
+                image_file = "test_images/"+row[0]+".png"
             image_records.append(image_file)
-            image_labels.append(label)
             i = i+1
             print(i)
     print(len(image_records))
@@ -130,6 +132,7 @@ def train(train_set,train_labels):
     train_image_labels = indices_to_one_hot(train_image_labels,5)
     train_image_labels = np.reshape(train_image_labels,(-1,5))
     print("shapes")
+    print(train_image_features)
     print(len(train_image_features))
     print(len(train_image_labels))
 
@@ -140,6 +143,7 @@ def train(train_set,train_labels):
     print("dddd")
     model.train(input_fn=lambda:train_input_fn(train_image_features,train_image_labels,100,20),steps = steps)
     print(model)
+    model.export_savedmodel("test_model",serving_input_receiver_fn=serving_input_rvr_fn)
 
 def evaluate(val_set,val_labels):
     val_image_features = val_set
@@ -165,21 +169,21 @@ def evaluate(val_set,val_labels):
 
 
 def predict():
-   pred_image_features = train_image_features_glb[train_size:][0:3]
-   #pred_image_features = np.array(pred_image_features)
-   print("3")
-   print(len(pred_image_features))
-   print(pred_image_features[0].shape)
-   model_input = tf.train.Example(features=tf.train.Features(feature={"images":tf.train.Feature(float_list=tf.train.FloatList(value=pred_image_features[0]))}))
+   test_images,lbls = prepare_image_files("test.csv")
+   print(len(test_images))
+   print(test_images)
+   test_record,lbl = parse_feature_label(test_images[0],0)
+   print(test_record.shape)
+
+   model_input = tf.train.Example(features=tf.train.Features(feature={"images":tf.train.Feature(float_list=tf.train.FloatList(value=test_record))}))
    model_input = model_input.SerializeToString()
    predictor = tf.contrib.predictor.from_saved_model("test_model/1545839240")
    output_dict = predictor({"predictor_inputs": [model_input]})
    print(output_dict)
 
 
-train_set,train_labels = prepare_image_files("train.csv")
+#train_set,train_labels = prepare_image_files("train.csv",True)
 #val_set,val_labels = prepare_image_files("test.csv")
 
-train(train_set,train_labels)
-#evaluate(val_set,val_labels)
-#predict()
+#train(train_set,train_labels)
+predict()
