@@ -48,10 +48,11 @@ def prepare_image_set(path,file_name):
 
     return image_train_labels
 
+#https://www.damienpontifex.com/2018/05/06/tensorflow-serving-our-retrained-image-classifier/
 def serving_input_rvr_fn():
     serialized_tf_example = tf.placeholder(dtype=tf.string, shape=[batch_size], name='input_tensors')
     receiver_tensors = {"predictor_inputs": serialized_tf_example}
-    feature_spec ={"images": tf.FixedLenFeature([vector_size,vector_size], tf.float32)}
+    feature_spec ={"images": tf.FixedLenFeature([vector_size,vector_size], tf.int64)}
     features = tf.parse_example(serialized_tf_example, feature_spec)
     return tf.estimator.export.ServingInputReceiver(features, receiver_tensors)
 
@@ -60,14 +61,18 @@ cnnclassifier = CNNClassifier(vector_size,num_classes)
 model = cnnclassifier.get_classifier_model()
 
 
-def parse_feature_label(filename,label):
+def parse_feature_label(filename,label=None,is_predict=False):
     print("read image")
     print(filename)
     image_string = tf.read_file(filename)
     image_decoded = tf.image.decode_jpeg(image_string)
     image_resized = tf.image.resize_images(image_decoded, [vector_size, vector_size])
     print(image_resized.shape)
-    return image_resized,label
+
+    if is_predict:
+        return image_resized
+    else:
+        return image_resized,label
 
 def prepare_image_files(path,is_training=False):
     image_records = []
@@ -125,6 +130,20 @@ def eval_input_fn(features, labels, batch_size):
     dataset = dataset.repeat(1).prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
     return dataset
 
+# input_fn for evaluation and predicitions (labels can be null)
+def pred_input_fn(features,  batch_size=1):
+    print("predict labels.....")
+    dataset = tf.data.Dataset.from_tensor_slices((features))
+    dataset = dataset.shuffle(buffer_size=300)
+    dataset = dataset.apply(
+        tf.contrib.data.map_and_batch(
+            lambda x: parse_feature_label(x,is_predict=True),
+            batch_size=1,
+            num_parallel_batches=1,
+            drop_remainder=False))
+    dataset = dataset.repeat(1).prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+    return dataset
+
 def train(train_set,train_labels):
     train_image_features = train_set
     train_image_labels = train_labels
@@ -140,10 +159,9 @@ def train(train_set,train_labels):
     steps = steps if steps>0  else 1
 
     # Train the Model
-    print("dddd")
     model.train(input_fn=lambda:train_input_fn(train_image_features,train_image_labels,100,20),steps = steps)
     print(model)
-    model.export_savedmodel("test_model",serving_input_receiver_fn=serving_input_rvr_fn)
+    model.export_saved_model("predictor",serving_input_receiver_fn=serving_input_rvr_fn)
 
 def evaluate(val_set,val_labels):
     val_image_features = val_set
@@ -171,19 +189,24 @@ def evaluate(val_set,val_labels):
 def predict():
    test_images,lbls = prepare_image_files("test.csv")
    print(len(test_images))
-   print(test_images)
-   test_record,lbl = parse_feature_label(test_images[0],0)
-   print(test_record.shape)
+   #print(test_images)
 
-   model_input = tf.train.Example(features=tf.train.Features(feature={"images":tf.train.Feature(float_list=tf.train.FloatList(value=test_record))}))
-   model_input = model_input.SerializeToString()
-   predictor = tf.contrib.predictor.from_saved_model("test_model/1545839240")
+   model_input = pred_input_fn(test_images)
+   print("test shape...")
+   print(model_input)
+   predictor = tf.contrib.predictor.from_saved_model("test_model")
    output_dict = predictor({"predictor_inputs": [model_input]})
    print(output_dict)
 
+def predictors():
+   test_images,lbls = prepare_image_files("test.csv")
+   print(len(test_images))
+   #print(test_images)
 
-#train_set,train_labels = prepare_image_files("train.csv",True)
-#val_set,val_labels = prepare_image_files("test.csv")
+   obj = model.predict(input_fn=lambda:pred_input_fn(test_images))
 
-#train(train_set,train_labels)
-predict()
+train_set,train_labels = prepare_image_files("train.csv",True)
+#print("labels--->"+str(train_labels))
+
+train(train_set,train_labels)
+predictors()

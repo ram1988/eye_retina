@@ -123,4 +123,4 @@ class CNNClassifier:
 	def get_classifier_model(self):
 		print("get the model...")
 		return tf.estimator.Estimator(
-			model_fn = self.__model_fn, model_dir="/tmp/cnn_data")
+			model_fn = self.__model_fn)
