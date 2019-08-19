@@ -35,9 +35,31 @@ class CNNClassifier:
 		print("pool2 shape....")
 		print(pool2.shape)
 
+		conv3 = tf.layers.conv2d(
+			inputs=pool2,
+			filters=15,
+			kernel_size=[3, 3],
+			padding="same",
+			activation=tf.nn.relu)
+		pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2], strides=2)
+
+		print("pool3 shape....")
+		print(pool3.shape)
+
+		conv4 = tf.layers.conv2d(
+			inputs=pool3,
+			filters=20,
+			kernel_size=[3, 3],
+			padding="same",
+			activation=tf.nn.relu)
+		pool4 = tf.layers.max_pooling2d(inputs=conv4, pool_size=[2, 2], strides=2)
+
+		print("pool4 shape....")
+		print(pool4.shape)
+
 		# Dense Layer
-		pool2_flat = tf.reshape(pool2, [-1, 99 * 99 * 10])
-		dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+		pool4_flat = tf.reshape(pool4, [-1, 24 * 24 * 20])
+		dense = tf.layers.dense(inputs=pool4_flat, units=1024, activation=tf.nn.relu)
 		dropout = tf.layers.dropout(
 			inputs=dense, rate=0.4, training=True)
 
