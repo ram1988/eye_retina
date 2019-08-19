@@ -48,13 +48,31 @@ def prepare_image_set(path,file_name):
 
     return image_train_labels
 
-#https://www.damienpontifex.com/2018/05/06/tensorflow-serving-our-retrained-image-classifier/
+#https://medium.com/tensorflow/how-to-write-a-custom-estimator-model-for-the-cloud-tpu-7d8bd9068c26
 def serving_input_rvr_fn():
     serialized_tf_example = tf.placeholder(dtype=tf.string, shape=[batch_size], name='input_tensors')
     receiver_tensors = {"predictor_inputs": serialized_tf_example}
     feature_spec ={"images": tf.FixedLenFeature([vector_size,vector_size], tf.int64)}
     features = tf.parse_example(serialized_tf_example, feature_spec)
     return tf.estimator.export.ServingInputReceiver(features, receiver_tensors)
+
+def serving_input_receiver_fn():
+    feature_spec = {
+        'image': tf.FixedLenFeature([], dtype=tf.string)
+    }
+       
+    default_batch_size = 1
+
+    serialized_tf_example = tf.placeholder(
+        dtype=tf.string, shape=[default_batch_size], 
+        name='input_image_tensor')
+    
+    received_tensors = { 'images': serialized_tf_example }
+    features = tf.parse_example(serialized_tf_example, feature_spec)
+    fn = lambda image: parse_feature_label(image, True)
+    features['image'] = tf.map_fn(fn, features['image'], dtype=(tf.float32, tf.float32))
+
+    return tf.estimator.export.ServingInputReceiver(features, received_tensors)
 
 
 cnnclassifier = CNNClassifier(vector_size,num_classes)
@@ -138,7 +156,7 @@ def pred_input_fn(features,  batch_size=1):
     dataset = dataset.apply(
         tf.contrib.data.map_and_batch(
             lambda x: parse_feature_label(x,is_predict=True),
-            batch_size=1,
+            batch_size=1000,
             num_parallel_batches=1,
             drop_remainder=False))
     dataset = dataset.repeat(1).prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
@@ -151,7 +169,6 @@ def train(train_set,train_labels):
     train_image_labels = indices_to_one_hot(train_image_labels,5)
     train_image_labels = np.reshape(train_image_labels,(-1,5))
     print("shapes")
-    print(train_image_features)
     print(len(train_image_features))
     print(len(train_image_labels))
 
@@ -161,7 +178,7 @@ def train(train_set,train_labels):
     # Train the Model
     model.train(input_fn=lambda:train_input_fn(train_image_features,train_image_labels,100,20),steps = steps)
     print(model)
-    model.export_saved_model("predictor",serving_input_receiver_fn=serving_input_rvr_fn)
+    #model.export_saved_model("predictor",serving_input_receiver_fn=serving_input_receiver_fn)
 
 def evaluate(val_set,val_labels):
     val_image_features = val_set
@@ -203,10 +220,18 @@ def predictors():
    print(len(test_images))
    #print(test_images)
 
-   obj = model.predict(input_fn=lambda:pred_input_fn(test_images))
+   predict_results = model.predict(input_fn=lambda:pred_input_fn(test_images))
+   print(predict_results)
+   overall_results = []
+   for prediction in predict_results:
+       overall_results.append(prediction["classes"])
+       print(prediction["classes"])
+
+   return overall_results
 
 train_set,train_labels = prepare_image_files("train.csv",True)
 #print("labels--->"+str(train_labels))
 
 train(train_set,train_labels)
-predictors()
+results = predictors()
+print(results)

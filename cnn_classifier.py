@@ -20,6 +20,8 @@ class CNNClassifier:
 			activation=tf.nn.relu)
 		# Pooling Layer #1
 		pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=1)
+		print("pool1 shape....")
+		print(pool1.shape)
 
 		# Convolutional Layer #2 and Pooling Layer #2
 		conv2 = tf.layers.conv2d(
@@ -30,7 +32,7 @@ class CNNClassifier:
 			activation=tf.nn.relu)
 		pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
-		print("train shape....")
+		print("pool2 shape....")
 		print(pool2.shape)
 
 		# Dense Layer
@@ -54,14 +56,12 @@ class CNNClassifier:
 		#image_features = features
 		img_features = tf.reshape(image_features, [-1, self.vector_size, self.vector_size, 1])
 		self.logits = self.define_model_net(img_features)
-		loss = tf.losses.softmax_cross_entropy(onehot_labels=labels, logits=self.logits)
-		optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
-		train_op = optimizer.minimize(
-			loss=loss,
-			global_step=tf.train.get_or_create_global_step())
-
-
 		if mode == tf.estimator.ModeKeys.TRAIN:
+			loss = tf.losses.softmax_cross_entropy(onehot_labels=labels, logits=self.logits)
+			optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+			train_op = optimizer.minimize(
+				loss=loss,
+				global_step=tf.train.get_or_create_global_step())
 			return self.__train_model_fn(labels, mode, params, self.logits, loss, train_op)
 		elif mode == tf.estimator.ModeKeys.EVAL:
 			print("evaluate...111")
@@ -69,7 +69,7 @@ class CNNClassifier:
 			print("val ends")
 			return obj
 		else:
-			return self.__predict_model_fn(logits)
+			return self.__predict_model_fn(self.logits)
 
 	def __train_model_fn(self,image_labels,mode,params,logits,loss,train_op):
 		print(mode)
@@ -109,9 +109,11 @@ class CNNClassifier:
 	def __predict_model_fn(self,logits):
 		print("PRED....")
 		print(logits)
+		probabilities = tf.nn.softmax(logits)
+		class_int = tf.argmax(logits, axis=1)
 		predictions = {
-				"classes": tf.argmax(logits, axis=1),
-				"probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+				"classes": class_int,
+				"probabilities": probabilities
 			}
 		return tf.estimator.EstimatorSpec(mode=tf.estimator.ModeKeys.PREDICT,
 										  predictions=predictions,
