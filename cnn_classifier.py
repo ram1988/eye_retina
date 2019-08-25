@@ -72,6 +72,8 @@ class CNNClassifier:
 
 	def __model_fn(self,features, labels, mode, params):
 		image_features = features
+		if isinstance(features, dict):
+			image_features = features['image']   
 		print("MODEL@@@@@@")
 		print(image_features)
 		print(labels)

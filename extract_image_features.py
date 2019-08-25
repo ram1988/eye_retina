@@ -49,30 +49,31 @@ def prepare_image_set(path,file_name):
     return image_train_labels
 
 #https://medium.com/tensorflow/how-to-write-a-custom-estimator-model-for-the-cloud-tpu-7d8bd9068c26
-def serving_input_rvr_fn():
-    serialized_tf_example = tf.placeholder(dtype=tf.string, shape=[batch_size], name='input_tensors')
-    receiver_tensors = {"predictor_inputs": serialized_tf_example}
-    feature_spec ={"images": tf.FixedLenFeature([vector_size,vector_size], tf.int64)}
-    features = tf.parse_example(serialized_tf_example, feature_spec)
-    return tf.estimator.export.ServingInputReceiver(features, receiver_tensors)
-
-def serving_input_receiver_fn():
+def prepare_test_data(image_data):
+     parsed = tf.parse_example(image_data, {
+      'image/encoded': tf.FixedLenFeature((), tf.string, '')    
+      })
+     image = parse_feature_label(parsed['image/encoded'], is_predict=True)
+     print("parsed dart-->"+str(image))
+     return image
+    
+def serving_input_receiver_fn():    
     feature_spec = {
         'image': tf.FixedLenFeature([], dtype=tf.string)
     }
-       
-    default_batch_size = 1
-
+    
     serialized_tf_example = tf.placeholder(
-        dtype=tf.string, shape=[default_batch_size], 
+        dtype=tf.string, shape=[1], 
         name='input_image_tensor')
     
     received_tensors = { 'images': serialized_tf_example }
     features = tf.parse_example(serialized_tf_example, feature_spec)
-    fn = lambda image: parse_feature_label(image, True)
-    features['image'] = tf.map_fn(fn, features['image'], dtype=(tf.float32, tf.float32))
+    
+    fn = lambda image: parse_feature_label(image, is_predict=True)
+    features['image'] = tf.map_fn(fn, features['image'], dtype=tf.float32)
 
     return tf.estimator.export.ServingInputReceiver(features, received_tensors)
+
 
 
 cnnclassifier = CNNClassifier(vector_size,num_classes)
@@ -80,7 +81,7 @@ model = cnnclassifier.get_classifier_model()
 
 
 def parse_feature_label(filename,label=None,is_predict=False):
-    print("read image")
+    print("read image-->")
     print(filename)
     image_string = tf.read_file(filename)
     image_decoded = tf.image.decode_jpeg(image_string)
@@ -109,7 +110,6 @@ def prepare_image_files(path,is_training=False):
             i = i+1
             print(i)
     print(len(image_records))
-    print(image_labels)
 
     return image_records,image_labels
 
@@ -178,7 +178,7 @@ def train(train_set,train_labels):
     # Train the Model
     model.train(input_fn=lambda:train_input_fn(train_image_features,train_image_labels,100,20),steps = steps)
     print(model)
-    #model.export_saved_model("predictor",serving_input_receiver_fn=serving_input_receiver_fn)
+    model.export_saved_model("predictor",serving_input_receiver_fn=serving_input_receiver_fn)
 
 def evaluate(val_set,val_labels):
     val_image_features = val_set
@@ -202,18 +202,33 @@ def evaluate(val_set,val_labels):
         print("   {}, was: {}".format(key, evaluate_result[key]))
     #model.export_savedmodel("test_model",serving_input_receiver_fn=serving_input_rvr_fn)
 
+def print_rec(record):
+    print("print---r")
+    print(record)
+    return record
 
+#https://stackoverflow.com/questions/48904313/invalidargumenterror-when-loading-tfrecord-file
 def predict():
    test_images,lbls = prepare_image_files("test.csv")
-   print(len(test_images))
-   #print(test_images)
+   print(test_images[0])
 
-   model_input = pred_input_fn(test_images)
-   print("test shape...")
-   print(model_input)
-   predictor = tf.contrib.predictor.from_saved_model("test_model")
-   output_dict = predictor({"predictor_inputs": [model_input]})
-   print(output_dict)
+   predictor = tf.contrib.predictor.from_saved_model("predictor/1566771866")
+   for tst_img in test_images:
+        content_tf_list = tf.train.BytesList(value=[str.encode(tst_img)])
+        example = tf.train.Example(
+                    features=tf.train.Features(
+                        feature={
+                            'image': tf.train.Feature(
+                                bytes_list=content_tf_list
+                            )
+                        }
+                    )
+                )
+        print(example)
+        serialized_example = example.SerializeToString()
+        print(serialized_example)
+        op = predictor({'images': [serialized_example]})
+        print(op)
 
 def predictors():
    test_images,lbls = prepare_image_files("test.csv")
@@ -229,9 +244,7 @@ def predictors():
 
    return overall_results
 
-train_set,train_labels = prepare_image_files("train.csv",True)
-#print("labels--->"+str(train_labels))
+#train_set,train_labels = prepare_image_files("train.csv",True)
+#train(train_set,train_labels)
+predict()
 
-train(train_set,train_labels)
-results = predictors()
-print(results)
