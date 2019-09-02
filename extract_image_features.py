@@ -84,7 +84,7 @@ def parse_feature_label(filename,label=None,is_predict=False):
     if is_predict:      
         print("read pred image-->")  
         print(filename)
-        return image_resized
+        return { 'image': image_resized }
     else:
         return ({ 'image': image_resized },label)
 
@@ -157,19 +157,11 @@ def pred_input_fn(features,  batch_size=1):
     print(len(features))
     dataset = tf.data.Dataset.from_tensor_slices((features))
     print(dataset)
-    dataset = dataset.map(lambda x: parse_feature_label(x,is_predict=True))
+    dataset = dataset.map(lambda x: parse_feature_label(x,is_predict=True)).batch(len(features))
     print("shape of predict")
     print(dataset)
-    '''
-    iterator = dataset.make_one_shot_iterator()
-    next_element = iterator.get_next()
-    with tf.Session() as sess:
-        i = 0
-        while next_element is not None:
-            x = sess.run(next_element)
-            print(i)
-            i = i+1
-    '''
+    dataset = dataset.repeat(1).prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+
     return dataset
 
 def train(train_set,train_labels):
