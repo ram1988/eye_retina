@@ -84,9 +84,9 @@ def parse_feature_label(filename,label=None,is_predict=False):
     if is_predict:      
         print("read pred image-->")  
         print(filename)
-        return { 'image': image_resized }
+        return image_resized
     else:
-        return ({ 'image': image_resized },label)
+        return (image_resized,label)
 
 def prepare_image_files(path,is_training=False):
     image_records = []
@@ -240,7 +240,7 @@ def predictors():
    print(len(test_images))
    #print(test_images)
 
-   predictions = model.predict(input_fn=pred_input_fn(test_images))
+   predictions = model.predict(input_fn=lambda:pred_input_fn(test_images))
 
    for prediction in predictions:
         print(prediction["classes"])
