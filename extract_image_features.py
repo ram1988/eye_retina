@@ -11,6 +11,7 @@ vector_size=200
 num_classes = 5
 batch_size = 100
 
+
 # Feature extractor
 def extract_features(image_path, vector_size=200):
     image = io.imread(image_path, as_gray=True)
@@ -49,15 +50,7 @@ def prepare_image_set(path,file_name):
     return image_train_labels
 
 #https://medium.com/tensorflow/how-to-write-a-custom-estimator-model-for-the-cloud-tpu-7d8bd9068c26
-def prepare_test_data(image_data):
-     parsed = tf.parse_example(image_data, {
-      'image/encoded': tf.FixedLenFeature((), tf.string, '')    
-      })
-     image = parse_feature_label(parsed['image/encoded'], is_predict=True)
-     print("parsed dart-->"+str(image))
-     return image
-    
-def serving_input_receiver_fn():    
+def serving_input_receiver_fn(): 
     feature_spec = {
         'image': tf.FixedLenFeature([], dtype=tf.string)
     }
@@ -81,21 +74,24 @@ model = cnnclassifier.get_classifier_model()
 
 
 def parse_feature_label(filename,label=None,is_predict=False):
-    print("read image-->")
-    print(filename)
     image_string = tf.read_file(filename)
-    image_decoded = tf.image.decode_jpeg(image_string)
-    image_resized = tf.image.resize_images(image_decoded, [vector_size, vector_size])
+    image_decoded = tf.image.decode_png(image_string)
+    image_decoded = tf.image.convert_image_dtype(image_decoded, dtype=tf.float64)
+    image_resized = tf.image.resize_images(image_decoded, (vector_size, vector_size))
+    print("parsed feature laberl.....")
     print(image_resized.shape)
 
-    if is_predict:
+    if is_predict:      
+        print("read pred image-->")  
+        print(filename)
         return image_resized
     else:
-        return image_resized,label
+        return ({ 'image': image_resized },label)
 
 def prepare_image_files(path,is_training=False):
     image_records = []
     image_labels = []
+    ids = []
     i = 0
     with open(path) as train_labels:
         csv_reader = csv.reader(train_labels)
@@ -107,11 +103,11 @@ def prepare_image_files(path,is_training=False):
             else:
                 image_file = "test_images/"+row[0]+".png"
             image_records.append(image_file)
+            ids.append(row[0])
             i = i+1
-            print(i)
     print(len(image_records))
 
-    return image_records,image_labels
+    return image_records,image_labels,ids
 
 
 
@@ -121,16 +117,23 @@ def prepare_image_files(path,is_training=False):
 #change the logic accordingly
 def train_input_fn(features, labels, batch_size, repeat_count):
     print("train labels.....")
-    print(labels)
     dataset = tf.data.Dataset.from_tensor_slices((features, labels))
     dataset = dataset.shuffle(buffer_size=300)
-    dataset = dataset.apply(
-        tf.contrib.data.map_and_batch(
-            lambda x, y: parse_feature_label(x, y),
-            batch_size=1,
-            num_parallel_batches=1,
-            drop_remainder=False))
+    dataset = dataset.map(lambda x, y: parse_feature_label(x, y)).batch(batch_size)
+    print("train labels---->")
+    
+
+    print(dataset)
     dataset = dataset.repeat(1).prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+    '''
+    iter = dataset.make_initializable_iterator()
+    el = iter.get_next()
+    with tf.Session() as sess:
+        sess.run(iter.initializer)
+        print("----")
+        print(sess.run(el)[0].shape)
+        print("----")
+    '''
     return dataset
 
 # input_fn for evaluation and predicitions (labels can be null)
@@ -151,15 +154,22 @@ def eval_input_fn(features, labels, batch_size):
 # input_fn for evaluation and predicitions (labels can be null)
 def pred_input_fn(features,  batch_size=1):
     print("predict labels.....")
+    print(len(features))
     dataset = tf.data.Dataset.from_tensor_slices((features))
-    dataset = dataset.shuffle(buffer_size=300)
-    dataset = dataset.apply(
-        tf.contrib.data.map_and_batch(
-            lambda x: parse_feature_label(x,is_predict=True),
-            batch_size=1000,
-            num_parallel_batches=1,
-            drop_remainder=False))
-    dataset = dataset.repeat(1).prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+    print(dataset)
+    dataset = dataset.map(lambda x: parse_feature_label(x,is_predict=True))
+    print("shape of predict")
+    print(dataset)
+    '''
+    iterator = dataset.make_one_shot_iterator()
+    next_element = iterator.get_next()
+    with tf.Session() as sess:
+        i = 0
+        while next_element is not None:
+            x = sess.run(next_element)
+            print(i)
+            i = i+1
+    '''
     return dataset
 
 def train(train_set,train_labels):
@@ -171,12 +181,15 @@ def train(train_set,train_labels):
     print("shapes")
     print(len(train_image_features))
     print(len(train_image_labels))
+    print("max steps")
 
     steps = (len(train_image_features)/batch_size)-1
     steps = steps if steps>0  else 1
+    print(steps)
 
-    # Train the Model
+    # Train the Model in loop in future
     model.train(input_fn=lambda:train_input_fn(train_image_features,train_image_labels,100,20),steps = steps)
+    print("TRAINED MODEL--->")
     print(model)
     model.export_saved_model("predictor",serving_input_receiver_fn=serving_input_receiver_fn)
 
@@ -209,12 +222,12 @@ def print_rec(record):
 
 #https://stackoverflow.com/questions/48904313/invalidargumenterror-when-loading-tfrecord-file
 def predict():
-   test_images,lbls = prepare_image_files("test.csv")
+   test_images,lbls,ids = prepare_image_files("test.csv")
    print(test_images[0])
 
-   predictor = tf.contrib.predictor.from_saved_model("predictor/1566771866")
-   for tst_img in test_images:
-        content_tf_list = tf.train.BytesList(value=[str.encode(tst_img)])
+   predictor = tf.contrib.predictor.from_saved_model("predictor/1566822335")
+   for tst_img in test_images[0:2]:
+        content_tf_list = tf.train.BytesList(value=[tst_img.encode()])
         example = tf.train.Example(
                     features=tf.train.Features(
                         feature={
@@ -224,27 +237,38 @@ def predict():
                         }
                     )
                 )
-        print(example)
         serialized_example = example.SerializeToString()
         print(serialized_example)
         op = predictor({'images': [serialized_example]})
         print(op)
 
 def predictors():
-   test_images,lbls = prepare_image_files("test.csv")
+   test_images,lbls,ids = prepare_image_files("test.csv")
+   print("length of test")
    print(len(test_images))
    #print(test_images)
 
-   predict_results = model.predict(input_fn=lambda:pred_input_fn(test_images))
-   print(predict_results)
-   overall_results = []
+   predictions = model.predict(input_fn=pred_input_fn(test_images))
+
+   for prediction in predictions:
+        print(prediction["classes"])
+   
+   '''
+   idx = 0
+   f = open("sample_submission1.csv", "w+")
    for prediction in predict_results:
-       overall_results.append(prediction["classes"])
-       print(prediction["classes"])
+       #print(prediction)
+       #print(idx)
+       if idx<len(ids):
+            f.write(ids[idx]+","+str(prediction["classes"])+"\n")
+       idx = idx+1
+   f.close()
+
 
    return overall_results
+   '''
+train_set,train_labels,ids = prepare_image_files("train.csv",True)
+train(train_set,train_labels)
 
-#train_set,train_labels = prepare_image_files("train.csv",True)
-#train(train_set,train_labels)
-predict()
+predictors()
 
