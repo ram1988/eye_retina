@@ -43,7 +43,7 @@ class CNNClassifier:
 
 		# Convolutional Layer #1
 		conv3 = tf.layers.conv2d(
-			inputs=pool3,
+			inputs=pool2,
 			filters=30,
 			kernel_size=[3, 3],
 			padding="same",

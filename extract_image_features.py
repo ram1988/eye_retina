@@ -8,9 +8,9 @@ from cnn_classifier import *
 import scipy
 import itertools
 
-vector_size = 300
+vector_size = 500
 num_classes = 5
-batch_size = 500
+batch_size = 600
 
 
 # Feature extractor
@@ -234,7 +234,7 @@ def predict():
     print(test_images[0])
 
     output = []
-    predictor = tf.contrib.predictor.from_saved_model("predictor/1567971470")
+    predictor = tf.contrib.predictor.from_saved_model("predictor/1567980949")
     for tst_img in test_images:
         content_tf_list = tf.train.BytesList(value=[tst_img.encode()])
         example = tf.train.Example(
