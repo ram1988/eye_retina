@@ -10,7 +10,7 @@ import itertools
 
 vector_size = 500
 num_classes = 5
-batch_size = 600
+batch_size = 1000
 
 
 # Feature extractor
@@ -234,7 +234,7 @@ def predict():
     print(test_images[0])
 
     output = []
-    predictor = tf.contrib.predictor.from_saved_model("predictor/1567980949")
+    predictor = tf.contrib.predictor.from_saved_model("predictor/1567981585")
     for tst_img in test_images:
         content_tf_list = tf.train.BytesList(value=[tst_img.encode()])
         example = tf.train.Example(
@@ -248,9 +248,9 @@ def predict():
                 )
         serialized_example = example.SerializeToString()
         print(serialized_example)
-        op = predictor({'images': [serialized_example]})
+        op = predictor({'images': [serialized_example]})["classes"][0]
         print(op)
-        output.append(op["classes"][0])
+        output.append(op)
     write_results(output,ids)
 
 def predictors():
@@ -279,8 +279,8 @@ def write_results(predict_results,ids):
        idx = idx+1
    f.close()
 
-train_set,train_labels,ids = prepare_image_files("train.csv",True)
-train(train_set,train_labels)
+#train_set,train_labels,ids = prepare_image_files("train.csv",True)
+#train(train_set,train_labels)
 
-#predict()
+predict()
 
