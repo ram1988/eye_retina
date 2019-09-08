@@ -22,17 +22,50 @@ class CNNClassifier:
 		# Convolutional Layer #1
 		conv1 = tf.layers.conv2d(
 			inputs=input_layer,
-			filters=2,
+			filters=10,
+			kernel_size=[5, 5],
+			padding="same",
+			activation=tf.nn.relu)
+
+		# Pooling Layer #1
+		pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[3, 3], strides=2)
+
+		# Convolutional Layer #1
+		conv2 = tf.layers.conv2d(
+			inputs=pool1,
+			filters=20,
+			kernel_size=[4, 4],
+			padding="same",
+			activation=tf.nn.relu)
+
+		# Pooling Layer #1
+		pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[3, 3], strides=2)
+
+		# Convolutional Layer #1
+		conv3 = tf.layers.conv2d(
+			inputs=pool3,
+			filters=30,
 			kernel_size=[3, 3],
 			padding="same",
 			activation=tf.nn.relu)
 
 		# Pooling Layer #1
-		pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+		pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[3, 3], strides=2)
+
+		# Convolutional Layer #1
+		conv4 = tf.layers.conv2d(
+			inputs=pool3,
+			filters=40,
+			kernel_size=[2, 2],
+			padding="same",
+			activation=tf.nn.relu)
+
+		# Pooling Layer #1
+		pool4 = tf.layers.max_pooling2d(inputs=conv4, pool_size=[3, 3], strides=2)
 
 
 		# Dense Layer
-		pool2_flat = tf.layers.flatten(pool1)
+		pool2_flat = tf.layers.flatten(pool4)
 		dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
 		dropout = tf.layers.dropout(
 			inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
