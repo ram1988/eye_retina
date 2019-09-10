@@ -16,9 +16,6 @@ class CNNClassifier:
 			features = features['image']   
 		input_layer = tf.reshape(features, [-1, self.vector_size, self.vector_size, 3])
 
-		print("model-->#########")
-		print(features)
-
 		# Convolutional Layer #1
 		conv1 = tf.layers.conv2d(
 			inputs=input_layer,
@@ -85,7 +82,6 @@ class CNNClassifier:
 			return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
 		# Calculate Loss (for both TRAIN and EVAL modes)
-		print("")
 		loss = tf.losses.softmax_cross_entropy(onehot_labels=labels, logits=logits)
 
 		# Configure the Training Op (for TRAIN mode)
@@ -99,7 +95,7 @@ class CNNClassifier:
 		# Add evaluation metrics (for EVAL mode)
 		eval_metric_ops = {
 			"accuracy": tf.metrics.accuracy(
-				labels=labels, predictions=predictions["classes"])
+				labels=tf.argmax(input=labels, axis=1), predictions=predictions["classes"])
 		}
 		return tf.estimator.EstimatorSpec(
 			mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
