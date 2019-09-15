@@ -4,13 +4,15 @@ import os
 import pickle
 import tensorflow as tf
 import numpy as np
-from cnn_classifier import *
 import scipy
 import itertools
 import sys
 
+from cnn_classifier import *
+from resnet import *
 
-vector_size = 500
+
+vector_size = 224
 num_classes = 5
 batch_size = 1000
 
@@ -38,7 +40,9 @@ def serving_input_receiver_fn():
     return tf.estimator.export.ServingInputReceiver(features, received_tensors)
 
 
-cnnclassifier = CNNClassifier(vector_size, num_classes)
+#cnnclassifier = CNNClassifier(vector_size, num_classes)
+cnnclassifier = ResnetClassifier(vector_size, num_classes)
+
 model = cnnclassifier.get_classifier_model()
 
 
@@ -165,6 +169,19 @@ def predict(model_path):
         output.append(op)
     write_results(output,ids)
 
+def predict_by_resnet(model_path):
+    test_images, lbls, ids = prepare_image_files("test.csv")
+
+    output = []
+    predictor = tf.contrib.predictor.from_saved_model(model_path)
+    for tst_img in test_images:
+        img_content = parse_feature_label(tst_img,is_predict=True)
+        print(img_content)
+        img_content = tf.reshape(img_content, [1, 224, 224 , 3])
+        op = predictor({'input': img_content})
+        output.append(op)
+    write_results(output,ids)
+
 def write_results(predict_results,ids):
    idx = 0
    f = open("sample_submission1.csv", "w+")
@@ -190,6 +207,10 @@ elif mode == "t":
 elif mode == "p":
     model_path = args[2]
     predict(model_path)
+elif mode == "pr":
+    model_path = args[2]
+    predict_by_resnet(model_path)
 else:
     print("invalid mode... please enter t, p or tp")
 
+#https://github.com/tensorflow/models/tree/master/official/r1/resnet
